@@ -152,22 +152,46 @@ const practiceStats = [
 ]
 
 export function DoctorDashboard() {
-  const { user, updateLocation, setOnlineStatus, logout } = useAuth()
+  const { user, logout } = useAuth()
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false)
   const [newHospital, setNewHospital] = useState("")
   const [newCity, setNewCity] = useState("")
+  const [isUpdatingLocation, setIsUpdatingLocation] = useState(false)
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
 
-  const handleLocationUpdate = () => {
+  const handleLocationUpdate = async () => {
     if (newHospital && newCity) {
-      updateLocation(newHospital, newCity)
-      setIsLocationModalOpen(false)
-      setNewHospital("")
-      setNewCity("")
+      setIsUpdatingLocation(true)
+      try {
+        const response = await apiClient.updateLocation(newHospital, newCity)
+        if (response.success) {
+          setIsLocationModalOpen(false)
+          setNewHospital("")
+          setNewCity("")
+          // Update user context would happen via the auth context
+        }
+      } catch (error) {
+        console.error('Location update failed:', error)
+      } finally {
+        setIsUpdatingLocation(false)
+      }
     }
   }
 
-  const toggleOnlineStatus = () => {
-    setOnlineStatus(!user?.isOnline)
+  const toggleOnlineStatus = async () => {
+    if (!user) return
+    
+    setIsUpdatingStatus(true)
+    try {
+      const response = await apiClient.updateOnlineStatus(!user.isOnline)
+      if (response.success) {
+        // User state will be updated via auth context
+      }
+    } catch (error) {
+      console.error('Status update failed:', error)
+    } finally {
+      setIsUpdatingStatus(false)
+    }
   }
 
   return (
@@ -180,7 +204,7 @@ export function DoctorDashboard() {
                 <Users className="h-8 w-8 text-primary" />
               </div>
               <div>
-                <h2 className="text-2xl font-serif font-bold">Welcome, {user?.name}</h2>
+                <h2 className="text-2xl font-serif font-bold">Welcome, Dr. {user?.firstName} {user?.lastName}</h2>
                 <p className="text-muted-foreground">{user?.specialization}</p>
                 <div className="flex items-center gap-2 mt-1">
                   <MapPin className="h-4 w-4 text-muted-foreground" />
@@ -198,7 +222,7 @@ export function DoctorDashboard() {
                 <Hospital className="h-4 w-4 mr-2" />
                 Update Location
               </Button>
-              <Button variant="outline" onClick={toggleOnlineStatus}>
+              <Button variant="outline" onClick={toggleOnlineStatus} disabled={isUpdatingStatus}>
                 {user?.isOnline ? "Go Offline" : "Go Online"}
               </Button>
               <Button variant="outline" onClick={logout}>
@@ -244,8 +268,8 @@ export function DoctorDashboard() {
                 </Select>
               </div>
               <div className="flex gap-2">
-                <Button onClick={handleLocationUpdate} className="flex-1">
-                  Update
+                <Button onClick={handleLocationUpdate} className="flex-1" disabled={isUpdatingLocation}>
+                  {isUpdatingLocation ? "Updating..." : "Update"}
                 </Button>
                 <Button variant="outline" onClick={() => setIsLocationModalOpen(false)} className="flex-1">
                   Cancel

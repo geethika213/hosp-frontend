@@ -3,117 +3,238 @@
 import type React from "react"
 import { createContext, useContext, useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
+import { apiClient } from "@/lib/api-client"
+import { socketService } from "@/lib/socket"
 
 interface User {
-  id: string
+  _id: string
   email: string
-  name: string
+  firstName: string
+  lastName: string
   role: "patient" | "doctor" | "admin"
+  phone?: string
+  avatar?: string
+  isActive: boolean
+  isVerified: boolean
+  lastLogin?: string
   // Doctor specific fields
   specialization?: string
   licenseNumber?: string
+  experience?: number
   currentHospital?: string
   currentCity?: string
   isOnline?: boolean
+  consultationFee?: number
+  rating?: {
+    average: number
+    count: number
+  }
   // Patient specific fields
   dateOfBirth?: string
-  phone?: string
-  address?: string
+  address?: {
+    street?: string
+    city?: string
+    state?: string
+    zipCode?: string
+    country?: string
+  }
+  emergencyContact?: {
+    name?: string
+    phone?: string
+    relationship?: string
+  }
+  medicalHistory?: Array<{
+    condition: string
+    diagnosedDate: string
+    status: string
+  }>
+  allergies?: string[]
+  medications?: Array<{
+    name: string
+    dosage: string
+    frequency: string
+    prescribedBy?: string
+    startDate?: string
+    endDate?: string
+  }>
 }
 
 interface AuthContextType {
   user: User | null
-  login: (email: string, password: string, role: string) => Promise<boolean>
+  login: (email: string, password: string) => Promise<boolean>
+  register: (userData: any) => Promise<boolean>
   logout: () => void
+  updateProfile: (profileData: any) => Promise<boolean>
   updateLocation: (hospital: string, city: string) => void
   setOnlineStatus: (status: boolean) => void
   isLoading: boolean
+  error: string | null
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-// Mock user data
-const mockUsers: User[] = [
-  {
-    id: "1",
-    email: "patient@demo.com",
-    name: "John Smith",
-    role: "patient",
-    dateOfBirth: "1990-05-15",
-    phone: "+1 (555) 123-4567",
-    address: "123 Main St, New York, NY",
-  },
-  {
-    id: "2",
-    email: "doctor@demo.com",
-    name: "Dr. Sarah Johnson",
-    role: "doctor",
-    specialization: "Cardiology",
-    licenseNumber: "MD12345",
-    currentHospital: "City General Hospital",
-    currentCity: "New York",
-    isOnline: true,
-  },
-  {
-    id: "3",
-    email: "admin@demo.com",
-    name: "Admin User",
-    role: "admin",
-  },
-]
-
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const router = useRouter()
 
   useEffect(() => {
-    // Check for stored user session
-    const storedUser = localStorage.getItem("healthai_user")
-    if (storedUser) {
-      setUser(JSON.parse(storedUser))
-    }
-    setIsLoading(false)
+    checkAuthStatus()
   }, [])
 
-  const login = async (email: string, password: string, role: string): Promise<boolean> => {
-    setIsLoading(true)
+  const checkAuthStatus = async () => {
+    try {
+      setIsLoading(true)
+      const token = localStorage.getItem('healthai_token')
+      
+      if (!token) {
+        setIsLoading(false)
+        return
+      }
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-
-    const foundUser = mockUsers.find((u) => u.email === email && u.role === role)
-
-    if (foundUser && password === "demo123") {
-      setUser(foundUser)
-      localStorage.setItem("healthai_user", JSON.stringify(foundUser))
+      const response = await apiClient.getCurrentUser()
+      
+      if (response.success && response.user) {
+        setUser(response.user)
+        // Connect socket with token
+        socketService.connect(token)
+      } else {
+        // Invalid token, clear it
+        apiClient.clearToken()
+      }
+    } catch (error) {
+      console.error('Auth check error:', error)
+      apiClient.clearToken()
+    } finally {
       setIsLoading(false)
-      return true
-    }
-
-    setIsLoading(false)
-    return false
-  }
-
-  const logout = () => {
-    setUser(null)
-    localStorage.removeItem("healthai_user")
-    router.push("/auth/login")
-  }
-
-  const updateLocation = (hospital: string, city: string) => {
-    if (user && user.role === "doctor") {
-      const updatedUser = { ...user, currentHospital: hospital, currentCity: city }
-      setUser(updatedUser)
-      localStorage.setItem("healthai_user", JSON.stringify(updatedUser))
     }
   }
 
-  const setOnlineStatus = (status: boolean) => {
-    if (user && user.role === "doctor") {
-      const updatedUser = { ...user, isOnline: status }
-      setUser(updatedUser)
-      localStorage.setItem("healthai_user", JSON.stringify(updatedUser))
+  const login = async (email: string, password: string): Promise<boolean> => {
+    try {
+      setIsLoading(true)
+      setError(null)
+
+      const response = await apiClient.login(email, password)
+      
+      if (response.success && response.user) {
+        setUser(response.user)
+        localStorage.setItem("healthai_user", JSON.stringify(response.user))
+        
+        // Connect socket
+        if (response.token) {
+          socketService.connect(response.token)
+        }
+        
+        setIsLoading(false)
+        return true
+      } else {
+        setError(response.message || 'Login failed')
+        setIsLoading(false)
+        return false
+      }
+    } catch (error: any) {
+      console.error('Login error:', error)
+      setError(error.message || 'Login failed')
+      setIsLoading(false)
+      return false
+    }
+  }
+
+  const register = async (userData: any): Promise<boolean> => {
+    try {
+      setIsLoading(true)
+      setError(null)
+
+      const response = await apiClient.register(userData)
+      
+      if (response.success && response.user) {
+        setUser(response.user)
+        localStorage.setItem("healthai_user", JSON.stringify(response.user))
+        
+        // Connect socket
+        if (response.token) {
+          socketService.connect(response.token)
+        }
+        
+        setIsLoading(false)
+        return true
+      } else {
+        setError(response.message || 'Registration failed')
+        setIsLoading(false)
+        return false
+      }
+    } catch (error: any) {
+      console.error('Registration error:', error)
+      setError(error.message || 'Registration failed')
+      setIsLoading(false)
+      return false
+    }
+  }
+
+  const logout = async () => {
+    try {
+      await apiClient.logout()
+    } catch (error) {
+      console.error('Logout error:', error)
+    } finally {
+      setUser(null)
+      socketService.disconnect()
+      router.push("/auth/login")
+    }
+  }
+
+  const updateProfile = async (profileData: any): Promise<boolean> => {
+    try {
+      setError(null)
+      const response = await apiClient.updateProfile(profileData)
+      
+      if (response.success && response.user) {
+        setUser(response.user)
+        localStorage.setItem("healthai_user", JSON.stringify(response.user))
+        return true
+      } else {
+        setError(response.message || 'Profile update failed')
+        return false
+      }
+    } catch (error: any) {
+      console.error('Profile update error:', error)
+      setError(error.message || 'Profile update failed')
+      return false
+    }
+  }
+
+  const updateLocation = async (hospital: string, city: string) => {
+    try {
+      if (user && user.role === "doctor") {
+        const response = await apiClient.updateLocation(hospital, city)
+        
+        if (response.success && response.user) {
+          setUser(response.user)
+          localStorage.setItem("healthai_user", JSON.stringify(response.user))
+        }
+      }
+    } catch (error) {
+      console.error('Location update error:', error)
+    }
+  }
+
+  const setOnlineStatus = async (status: boolean) => {
+    try {
+      if (user && user.role === "doctor") {
+        const response = await apiClient.updateOnlineStatus(status)
+        
+        if (response.success && response.user) {
+          setUser(response.user)
+          localStorage.setItem("healthai_user", JSON.stringify(response.user))
+          
+          // Update socket status
+          socketService.updateOnlineStatus(status)
+        }
+      }
+    } catch (error) {
+      console.error('Online status update error:', error)
     }
   }
 
@@ -122,10 +243,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       value={{
         user,
         login,
+        register,
         logout,
+        updateProfile,
         updateLocation,
         setOnlineStatus,
         isLoading,
+        error,
       }}
     >
       {children}

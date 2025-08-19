@@ -56,11 +56,43 @@ export default function RegisterPage() {
       return
     }
 
-    // Simulate registration
-    await new Promise((resolve) => setTimeout(resolve, 1500))
+    // Prepare registration data
+    const [firstName, ...lastNameParts] = formData.name.split(' ')
+    const lastName = lastNameParts.join(' ') || firstName
+    
+    const registrationData = {
+      email: formData.email,
+      password: formData.password,
+      firstName,
+      lastName,
+      role: formData.role,
+      phone: formData.phone,
+      ...(formData.role === 'patient' && {
+        dateOfBirth: formData.dateOfBirth,
+      }),
+      ...(formData.role === 'doctor' && {
+        specialization: formData.specialization,
+        licenseNumber: formData.licenseNumber,
+        experience: 0,
+      }),
+    }
 
-    // For demo purposes, redirect to login
-    router.push("/auth/login?message=Registration successful! Please sign in.")
+    const { register } = useAuth()
+    const success = await register(registrationData)
+    
+    if (success) {
+      // Redirect based on role
+      if (formData.role === "patient") {
+        router.push("/patient")
+      } else if (formData.role === "doctor") {
+        router.push("/doctor")
+      } else {
+        router.push("/dashboard")
+      }
+    } else {
+      setError("Registration failed. Please try again.")
+    }
+    
     setIsLoading(false)
   }
 

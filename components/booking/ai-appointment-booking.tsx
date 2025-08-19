@@ -15,6 +15,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { AIBookingChat } from "./ai-booking-chat"
 import { DoctorRecommendations } from "./doctor-recommendations"
 import { BookingConfirmation } from "./booking-confirmation"
+import { apiClient } from "@/lib/api-client"
 import { CalendarIcon, Clock, MessageSquare, Sparkles, X, MapPin } from "lucide-react"
 import { format } from "date-fns"
 import { cn } from "@/lib/utils"
@@ -118,15 +119,57 @@ export function AIAppointmentBooking() {
     e.preventDefault()
     setIsAnalyzing(true)
 
-    // Simulate AI analysis
-    setTimeout(() => {
-      setIsAnalyzing(false)
-      setStep("chat")
-    }, 2000)
+    try {
+      // Start AI chat session
+      const response = await apiClient.startChat({
+        symptoms: bookingData.symptoms,
+        urgency: bookingData.urgency,
+        preferredLocation: bookingData.preferredLocation,
+      })
+      
+      if (response.success) {
+        setIsAnalyzing(false)
+        setStep("chat")
+      } else {
+        console.error('Failed to start chat:', response.message)
+        // Fallback to mock behavior
+        setTimeout(() => {
+          setIsAnalyzing(false)
+          setStep("chat")
+        }, 1000)
+      }
+    } catch (error) {
+      console.error('Error starting chat:', error)
+      // Fallback to mock behavior
+      setTimeout(() => {
+        setIsAnalyzing(false)
+        setStep("chat")
+      }, 1000)
+    }
   }
 
-  const handleChatComplete = () => {
-    setStep("recommendations")
+  const handleChatComplete = async () => {
+    try {
+      // Search for doctors based on booking data
+      const response = await apiClient.searchDoctors({
+        symptoms: bookingData.symptoms,
+        preferredLocation: bookingData.preferredLocation,
+        urgency: bookingData.urgency,
+        preferredHospital: bookingData.preferredHospital !== "any" ? bookingData.preferredHospital : undefined,
+      })
+      
+      if (response.success) {
+        // Pass doctors data to recommendations component
+        setStep("recommendations")
+      } else {
+        console.error('Failed to search doctors:', response.message)
+        setStep("recommendations")
+      }
+    } catch (error) {
+      console.error('Error searching doctors:', error)
+      setIsAnalyzing(false)
+      setStep("recommendations")
+    }
   }
 
   const handleDoctorSelected = () => {

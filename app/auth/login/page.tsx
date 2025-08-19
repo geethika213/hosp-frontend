@@ -25,23 +25,27 @@ export default function LoginPage() {
     e.preventDefault()
     setError("")
 
-    if (!email || !password || !role) {
-      setError("Please fill in all fields")
+    if (!email || !password) {
+      setError("Please fill in email and password")
       return
     }
 
-    const success = await login(email, password, role)
+    const success = await login(email, password)
     if (success) {
-      // Redirect based on role
-      if (role === "patient") {
+      // Get user from context after successful login
+      const userRole = localStorage.getItem("healthai_user") ? 
+        JSON.parse(localStorage.getItem("healthai_user")!).role : null
+      
+      // Redirect based on user's actual role
+      if (userRole === "patient") {
         router.push("/patient")
-      } else if (role === "doctor") {
+      } else if (userRole === "doctor") {
         router.push("/doctor")
       } else {
         router.push("/dashboard")
       }
     } else {
-      setError("Invalid credentials. Use demo123 as password.")
+      setError(error || "Invalid credentials. Please check your email and password.")
     }
   }
 
@@ -64,20 +68,6 @@ export default function LoginPage() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="role">Role</Label>
-              <Select value={role} onValueChange={setRole}>
-                <SelectTrigger className="border-emerald-200 focus:border-emerald-500">
-                  <SelectValue placeholder="Select your role" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="patient">Patient</SelectItem>
-                  <SelectItem value="doctor">Doctor</SelectItem>
-                  <SelectItem value="admin">Admin</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
@@ -146,8 +136,8 @@ export default function LoginPage() {
 
           <div className="mt-4 p-3 bg-blue-50 rounded-lg">
             <p className="text-xs text-blue-800 font-medium">Demo Credentials:</p>
-            <p className="text-xs text-blue-700">Patient: patient@demo.com</p>
-            <p className="text-xs text-blue-700">Doctor: doctor@demo.com</p>
+            <p className="text-xs text-blue-700">Patient: patient1@demo.com</p>
+            <p className="text-xs text-blue-700">Doctor: dr.johnson@demo.com</p>
             <p className="text-xs text-blue-700">Password: demo123</p>
           </div>
         </div>

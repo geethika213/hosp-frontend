@@ -19,46 +19,9 @@ import {
   CheckCircle,
 } from "lucide-react"
 import Link from "next/link"
-
-const upcomingAppointments = [
-  {
-    id: "1",
-    doctor: "Dr. Sarah Johnson",
-    specialization: "Internal Medicine",
-    date: "March 15, 2024",
-    time: "9:00 AM",
-    type: "Follow-up",
-    status: "confirmed",
-  },
-  {
-    id: "2",
-    doctor: "Dr. Michael Chen",
-    specialization: "Cardiology",
-    date: "March 22, 2024",
-    time: "2:30 PM",
-    type: "Consultation",
-    status: "pending",
-  },
-]
-
-const recentVisits = [
-  {
-    id: "1",
-    doctor: "Dr. Emily Rodriguez",
-    date: "March 8, 2024",
-    diagnosis: "Annual Physical Exam",
-    summary: "Overall health is good. Blood pressure slightly elevated, recommend lifestyle changes.",
-    hasTranscript: true,
-  },
-  {
-    id: "2",
-    doctor: "Dr. Sarah Johnson",
-    date: "February 28, 2024",
-    diagnosis: "Cold Symptoms",
-    summary: "Viral upper respiratory infection. Prescribed rest and fluids. Follow-up if symptoms persist.",
-    hasTranscript: true,
-  },
-]
+import { useAuth } from "@/contexts/auth-context"
+import { apiClient } from "@/lib/api-client"
+import { useEffect, useState } from "react"
 
 const healthMetrics = [
   {
@@ -96,8 +59,40 @@ const healthMetrics = [
 ]
 
 export function PatientDashboard() {
+  const { user } = useAuth()
+  const [dashboardStats, setDashboardStats] = useState<any>(null)
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    loadDashboardData()
+  }, [])
+
+  const loadDashboardData = async () => {
+    try {
+      const response = await apiClient.getPatientDashboardStats()
+      if (response.success) {
+        setDashboardStats(response.stats)
+      }
+    } catch (error) {
+      console.error('Error loading dashboard data:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const upcomingAppointments = dashboardStats?.upcomingAppointments || []
+  const recentAppointments = dashboardStats?.recentAppointments || []
+
   return (
     <div className="space-y-6">
+      {/* Welcome Message */}
+      {user && (
+        <div className="bg-gradient-to-r from-primary/5 to-secondary/5 rounded-lg p-6">
+          <h2 className="text-2xl font-serif font-bold mb-2">Welcome back, {user.firstName}!</h2>
+          <p className="text-muted-foreground">Here's your health overview for today</p>
+        </div>
+      )}
+
       {/* Quick Actions */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Link href="/patient/book">
@@ -160,6 +155,15 @@ export function PatientDashboard() {
               </Link>
             </CardHeader>
             <CardContent className="space-y-4">
+              {isLoading ? (
+                <div className="space-y-4">
+                  {[1, 2].map((i) => (
+                    <div key={i} className="animate-pulse">
+                      <div className="h-20 bg-muted/30 rounded-lg"></div>
+                    </div>
+                  ))}
+                </div>
+              ) : upcomingAppointments.length > 0 ? (
               {upcomingAppointments.map((appointment) => (
                 <div key={appointment.id} className="flex items-center gap-4 p-4 bg-muted/30 rounded-lg">
                   <div className="flex items-center justify-center w-10 h-10 bg-primary/10 rounded-lg">
@@ -189,6 +193,15 @@ export function PatientDashboard() {
                   </Button>
                 </div>
               ))}
+              ) : (
+                <div className="text-center py-8">
+                  <Calendar className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                  <p className="text-muted-foreground">No upcoming appointments</p>
+                  <Link href="/patient/book">
+                    <Button className="mt-2">Book Your First Appointment</Button>
+                  </Link>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -206,38 +219,49 @@ export function PatientDashboard() {
               </Link>
             </CardHeader>
             <CardContent className="space-y-4">
-              {recentVisits.map((visit) => (
+              {isLoading ? (
+                <div className="space-y-4">
+                  {[1, 2].map((i) => (
+                    <div key={i} className="animate-pulse">
+                      <div className="h-24 bg-muted/30 rounded-lg"></div>
+                    </div>
+                  ))}
+                </div>
+              ) : recentAppointments.length > 0 ? (
+              {recentAppointments.map((visit) => (
                 <div key={visit.id} className="p-4 bg-muted/30 rounded-lg">
                   <div className="flex items-start justify-between mb-2">
                     <div>
                       <h4 className="font-medium">{visit.doctor}</h4>
                       <p className="text-sm text-muted-foreground">{visit.date}</p>
                     </div>
-                    {visit.hasTranscript && (
-                      <Badge variant="outline" className="text-xs">
-                        <MessageSquare className="h-3 w-3 mr-1" />
-                        Transcript
-                      </Badge>
-                    )}
+                    <Badge variant="outline" className="text-xs">
+                      <MessageSquare className="h-3 w-3 mr-1" />
+                      Completed
+                    </Badge>
                   </div>
                   <div className="mb-2">
-                    <p className="font-medium text-sm">{visit.diagnosis}</p>
+                    <p className="font-medium text-sm">{visit.type}</p>
                   </div>
-                  <p className="text-sm text-muted-foreground mb-3">{visit.summary}</p>
+                  <p className="text-sm text-muted-foreground mb-3">Visit completed successfully</p>
                   <div className="flex gap-2">
                     <Button variant="outline" size="sm">
                       View Details
                     </Button>
-                    {visit.hasTranscript && (
-                      <Link href="/patient/conversations">
-                        <Button variant="ghost" size="sm">
-                          View Transcript
-                        </Button>
-                      </Link>
-                    )}
+                    <Link href="/patient/conversations">
+                      <Button variant="ghost" size="sm">
+                        View Transcript
+                      </Button>
+                    </Link>
                   </div>
                 </div>
               ))}
+              ) : (
+                <div className="text-center py-8">
+                  <FileText className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                  <p className="text-muted-foreground">No recent visits</p>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -292,10 +316,12 @@ export function PatientDashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-center mb-4">
-                <div className="text-3xl font-bold text-primary mb-1">85</div>
+                <div className="text-3xl font-bold text-primary mb-1">
+                  {dashboardStats?.healthSummary?.score || 85}
+                </div>
                 <p className="text-sm text-muted-foreground">Good Health</p>
               </div>
-              <Progress value={85} className="mb-4" />
+              <Progress value={dashboardStats?.healthSummary?.score || 85} className="mb-4" />
               <div className="space-y-2 text-sm">
                 <div className="flex items-center gap-2">
                   <CheckCircle className="h-4 w-4 text-primary" />
@@ -303,11 +329,11 @@ export function PatientDashboard() {
                 </div>
                 <div className="flex items-center gap-2">
                   <CheckCircle className="h-4 w-4 text-primary" />
-                  <span>Medications up to date</span>
+                  <span>{dashboardStats?.healthSummary?.currentMedications || 0} active medications</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <AlertCircle className="h-4 w-4 text-yellow-500" />
-                  <span>Blood pressure needs attention</span>
+                  <span>{dashboardStats?.healthSummary?.medicalConditions || 0} medical conditions</span>
                 </div>
               </div>
             </CardContent>
